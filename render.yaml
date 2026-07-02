@@ -1,0 +1,42 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# Como usar (recrutador ou eu):
+#   1. Fork/clone este repo no GitHub.
+#   2. No Render Dashboard: New → Blueprint → aponta pra este repo → Apply.
+#   3. Render lê este arquivo, constrói via Dockerfile, provisiona e sobe a API.
+#   4. Após ~3 min: Swagger em https://segfy-api.onrender.com/docs
+#
+# Notas sobre o Free tier do Render:
+#   - Free web services dormem após 15 min ociosos (primeira request pós-sleep
+#     leva ~30 s). Mantém-se acordado se receber requests periódicos.
+#   - Sem disco persistente (disco custa >= Starter plan). O SQLite vive na
+#     rootFS do container e é reprovisionado a cada deploy/restart —
+#     o `SegfyDbSeeder` roda em Development e popula 6 apólices de exemplo.
+#     Para uso real, aumente para Starter e descomente o bloco `disk` abaixo.
+
+services:
+  - type: web
+    name: segfy-api
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      # Development ativa o seeder e o Swagger continua on em ambos os modos.
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Development
+      - key: ConnectionStrings__Default
+        value: Data Source=/app/data/segfy.db;Cache=Shared
+      - key: Segfy__ExpiringWindowDays
+        value: "30"
+      - key: Segfy__AutoExpirationEnabled
+        value: "true"
+      - key: Segfy__AutoExpirationIntervalSeconds
+        value: "3600"
+
+    # Descomente para plano Starter ou superior (persiste SQLite entre deploys):
+    # disk:
+    #   name: segfy-data
+    #   mountPath: /app/data
+    #   sizeGB: 1

@@ -29,3 +29,6 @@ Thumbs.db
 
 ## Publish
 publish/
+
+## Claude Code local context (not shared with recruiters)
+CLAUDE.md
