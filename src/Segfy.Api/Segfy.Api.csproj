@@ -3,6 +3,11 @@
   <PropertyGroup>
     <RootNamespace>Segfy.Api</RootNamespace>
     <AssemblyName>Segfy.Api</AssemblyName>
+    <!-- R2R is applied only at publish (dotnet build/run stay lightweight), but
+         the runtime package has to be resolved at restore time, so both the RID
+         and PublishReadyToRun need to be visible to the restore step. -->
+    <RuntimeIdentifiers>linux-x64</RuntimeIdentifiers>
+    <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>
 
   <ItemGroup>

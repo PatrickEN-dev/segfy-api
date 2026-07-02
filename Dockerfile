@@ -12,20 +12,24 @@ COPY src/Segfy.Domain/Segfy.Domain.csproj                 src/Segfy.Domain/
 COPY src/Segfy.Infrastructure/Segfy.Infrastructure.csproj src/Segfy.Infrastructure/
 
 # BuildKit cache mount: NuGet packages persist across builds. Local rebuilds skip
-# re-download; CI benefits alongside the GHA layer cache.
+# re-download; CI benefits alongside the GHA layer cache. -r linux-x64 pulls the
+# runtime package needed by PublishReadyToRun (declared in Segfy.Api.csproj).
 RUN --mount=type=cache,id=nuget,target=/root/.nuget/packages \
-    dotnet restore src/Segfy.Api/Segfy.Api.csproj
+    dotnet restore src/Segfy.Api/Segfy.Api.csproj -r linux-x64
 
 COPY src/ src/
 
 # ReadyToRun: precompiled native code for hot methods. Cuts cold-start ~20-40%,
 # critical for free-tier hosts (Render/Fly) that sleep the instance.
+# --no-self-contained keeps the app framework-dependent (runtime image already
+# ships ASP.NET); otherwise -r would produce a self-contained bundle (~80 MB extra).
 RUN --mount=type=cache,id=nuget,target=/root/.nuget/packages \
     dotnet publish src/Segfy.Api/Segfy.Api.csproj \
     -c Release \
+    -r linux-x64 \
+    --no-self-contained \
     -o /app/publish \
     /p:UseAppHost=false \
-    /p:PublishReadyToRun=true \
     --no-restore
 
 # ---------- Runtime stage ----------
