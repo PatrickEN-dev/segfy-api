@@ -7,4 +7,4 @@ public sealed record UpdatePolicyRequest(
     DateOnly CoverageStart,
     DateOnly CoverageEnd,
     string Status,
-    string? StatusReason);
+    string? StatusReason) : IPolicyPayload;

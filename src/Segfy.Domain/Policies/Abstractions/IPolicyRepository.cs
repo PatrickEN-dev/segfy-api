@@ -11,4 +11,5 @@ public interface IPolicyRepository
     Task<bool> ExistsActiveByPlateAsync(string plateValue, Guid? excludePolicyId, CancellationToken ct);
     Task<IReadOnlyList<Policy>> ListActiveExpiredAsync(DateOnly today, CancellationToken ct);
     Task<IReadOnlyList<PolicyStatusHistory>> ListStatusHistoryAsync(Guid policyId, CancellationToken ct);
+    Task SaveExpirationBatchAsync(IReadOnlyCollection<Policy> policies, CancellationToken ct);
 }

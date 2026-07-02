@@ -10,7 +10,7 @@ namespace Segfy.Application.Tests.UseCases;
 
 public sealed class ListPoliciesUseCaseTests
 {
-    private static ListPoliciesInput DefaultInput(
+    private static PolicyListQuery DefaultInput(
         int page = 1,
         int pageSize = 20,
         PolicyStatus? status = null,

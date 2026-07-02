@@ -5,4 +5,4 @@ public sealed record CreatePolicyRequest(
     string LicensePlate,
     decimal PremiumAmount,
     DateOnly CoverageStart,
-    DateOnly CoverageEnd);
+    DateOnly CoverageEnd) : IPolicyPayload;

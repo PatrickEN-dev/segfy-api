@@ -31,6 +31,14 @@ public sealed class PolicyConfiguration : IEntityTypeConfiguration<Policy>
             .HasColumnName("LicensePlate")
             .IsRequired();
 
+        // Defense-in-depth: SQLite partial unique index enforces "one Ativa policy per plate"
+        // at the database level. The Application layer also checks it, but the DB guard
+        // catches concurrent creates that could slip past the read-then-write TOCTOU window.
+        builder.HasIndex(p => p.LicensePlate)
+            .IsUnique()
+            .HasFilter("Status = 'Ativa'")
+            .HasDatabaseName("IX_Policies_LicensePlate_ActiveUnique");
+
         builder.Property(p => p.Premium)
             .HasConversion(
                 v => v.Amount.ToString("F2", CultureInfo.InvariantCulture),

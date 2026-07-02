@@ -1,0 +1,25 @@
+services:
+  api:
+    build: .
+    image: segfy-api:local
+    container_name: segfy-api
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8080}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ConnectionStrings__Default: ${CONNECTION_STRING:-Data Source=/app/data/segfy.db;Cache=Shared}
+      Segfy__ExpiringWindowDays: ${EXPIRING_WINDOW_DAYS:-30}
+      Segfy__AutoExpirationEnabled: ${AUTO_EXPIRATION_ENABLED:-true}
+      Segfy__AutoExpirationIntervalSeconds: ${AUTO_EXPIRATION_INTERVAL_SECONDS:-3600}
+    volumes:
+      - segfy-data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+volumes:
+  segfy-data:

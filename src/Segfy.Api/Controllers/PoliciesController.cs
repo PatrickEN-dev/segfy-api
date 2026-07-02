@@ -1,4 +1,5 @@
 using FluentValidation;
+using FluentValidation.Results;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Segfy.Api.Contracts;
@@ -15,6 +16,7 @@ namespace Segfy.Api.Controllers;
 [ApiController]
 [Route("api/v1/[controller]")]
 [Produces("application/json")]
+[Consumes("application/json")]
 public sealed class PoliciesController : ControllerBase
 {
     private readonly IValidator<CreatePolicyRequest> _createValidator;
@@ -61,27 +63,17 @@ public sealed class PoliciesController : ControllerBase
     public async Task<IActionResult> Create([FromBody] CreatePolicyRequest request, CancellationToken ct)
     {
         await _createValidator.ValidateAndThrowAsync(request, ct);
-
-        var input = new CreatePolicyInput(
-            request.Document,
-            request.LicensePlate,
-            request.PremiumAmount,
-            request.CoverageStart,
-            request.CoverageEnd);
-
-        var policy = await _create.ExecuteAsync(input, ct);
-        var response = PolicyPresenter.ToResponse(policy);
-        return CreatedAtAction(nameof(GetById), new { id = policy.Id }, response);
+        var policy = await _create.ExecuteAsync(
+            new CreatePolicyInput(request.Document, request.LicensePlate, request.PremiumAmount,
+                request.CoverageStart, request.CoverageEnd), ct);
+        return CreatedAtAction(nameof(GetById), new { id = policy.Id }, PolicyPresenter.ToResponse(policy));
     }
 
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(PolicyResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetById([FromRoute] Guid id, CancellationToken ct)
-    {
-        var policy = await _get.ExecuteAsync(id, ct);
-        return Ok(PolicyPresenter.ToResponse(policy));
-    }
+    public async Task<IActionResult> GetById([FromRoute] Guid id, CancellationToken ct) =>
+        Ok(PolicyPresenter.ToResponse(await _get.ExecuteAsync(id, ct)));
 
     [HttpGet]
     [ProducesResponseType(typeof(PaginatedPoliciesResponse), StatusCodes.Status200OK)]
@@ -97,21 +89,15 @@ public sealed class PoliciesController : ControllerBase
         [FromQuery] string? sortDir = null,
         CancellationToken ct = default)
     {
-        var statusFilter = ParseStatus(status);
-        var input = new ListPoliciesInput(
-            page,
-            pageSize,
-            statusFilter,
-            document,
-            licensePlate,
-            number,
+        var query = new PolicyListQuery(
+            page, pageSize,
+            ParseEnum<PolicyStatus>(status, "status", "Ativa, Cancelada, Expirada"),
+            document, licensePlate, number,
             ParseSortField(sortBy),
             ParseSortDir(sortDir));
 
-        var result = await _list.ExecuteAsync(input, ct);
-        var totalPages = result.PageSize <= 0
-            ? 0
-            : (int)Math.Ceiling(result.Total / (double)result.PageSize);
+        var result = await _list.ExecuteAsync(query, ct);
+        var totalPages = result.PageSize <= 0 ? 0 : (int)Math.Ceiling(result.Total / (double)result.PageSize);
         var meta = new PageMeta(result.Page, result.PageSize, result.Total, totalPages);
         return Ok(new PaginatedPoliciesResponse(PolicyPresenter.ToResponseList(result.Data), meta));
     }
@@ -127,17 +113,9 @@ public sealed class PoliciesController : ControllerBase
         CancellationToken ct)
     {
         await _updateValidator.ValidateAndThrowAsync(request, ct);
-
-        var input = new UpdatePolicyInput(
-            request.Document,
-            request.LicensePlate,
-            request.PremiumAmount,
-            request.CoverageStart,
-            request.CoverageEnd,
-            request.Status,
-            request.StatusReason);
-
-        var policy = await _update.ExecuteAsync(id, input, ct);
+        var policy = await _update.ExecuteAsync(id,
+            new UpdatePolicyInput(request.Document, request.LicensePlate, request.PremiumAmount,
+                request.CoverageStart, request.CoverageEnd, request.Status, request.StatusReason), ct);
         return Ok(PolicyPresenter.ToResponse(policy));
     }
 
@@ -165,21 +143,13 @@ public sealed class PoliciesController : ControllerBase
     public async Task<IActionResult> History([FromRoute] Guid id, CancellationToken ct)
     {
         var entries = await _history.ExecuteAsync(id, ct);
-        var data = entries.Select(PolicyPresenter.ToHistoryEntry).ToList();
-        return Ok(new StatusHistoryResponse(data));
+        return Ok(new StatusHistoryResponse(entries.Select(PolicyPresenter.ToHistoryEntry).ToList()));
     }
 
-    private static PolicyStatus? ParseStatus(string? raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw)) return null;
-        if (!Enum.TryParse<PolicyStatus>(raw, ignoreCase: false, out var s))
-            throw new FluentValidation.ValidationException(new[]
-            {
-                new FluentValidation.Results.ValidationFailure(
-                    "status", "Status must be one of: Ativa, Cancelada, Expirada.")
-            });
-        return s;
-    }
+    private static T? ParseEnum<T>(string? raw, string field, string allowed) where T : struct, Enum =>
+        string.IsNullOrWhiteSpace(raw) ? null
+        : Enum.TryParse<T>(raw, ignoreCase: true, out var value) && Enum.IsDefined(value) ? value
+        : throw ValidationFail(field, $"{field} must be one of: {allowed}.");
 
     private static PolicySortField ParseSortField(string? raw) =>
         raw?.Trim().ToLowerInvariant() switch
@@ -187,11 +157,7 @@ public sealed class PoliciesController : ControllerBase
             null or "" or "createdat" => PolicySortField.CreatedAt,
             "coverageend" => PolicySortField.CoverageEnd,
             "premium" => PolicySortField.Premium,
-            _ => throw new FluentValidation.ValidationException(new[]
-                {
-                    new FluentValidation.Results.ValidationFailure(
-                        "sortBy", "sortBy must be one of: createdAt, coverageEnd, premium."),
-                }),
+            _ => throw ValidationFail("sortBy", "sortBy must be one of: createdAt, coverageEnd, premium."),
         };
 
     private static SortDirection ParseSortDir(string? raw) =>
@@ -199,10 +165,9 @@ public sealed class PoliciesController : ControllerBase
         {
             null or "" or "desc" => SortDirection.Desc,
             "asc" => SortDirection.Asc,
-            _ => throw new FluentValidation.ValidationException(new[]
-                {
-                    new FluentValidation.Results.ValidationFailure(
-                        "sortDir", "sortDir must be one of: asc, desc."),
-                }),
+            _ => throw ValidationFail("sortDir", "sortDir must be one of: asc, desc."),
         };
+
+    private static ValidationException ValidationFail(string field, string message) =>
+        new(new[] { new ValidationFailure(field, message) });
 }

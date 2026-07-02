@@ -1,32 +1,25 @@
 using FluentValidation;
 using Segfy.Api.Contracts;
+using Segfy.Domain.Policies;
 
 namespace Segfy.Api.Validators;
 
-public sealed class UpdatePolicyRequestValidator : AbstractValidator<UpdatePolicyRequest>
+public sealed class UpdatePolicyRequestValidator : PolicyRequestValidatorBase<UpdatePolicyRequest>
 {
     public UpdatePolicyRequestValidator()
     {
-        RuleFor(x => x.Document).NotEmpty().MaximumLength(20);
-        RuleFor(x => x.LicensePlate).NotEmpty().MaximumLength(10);
-        RuleFor(x => x.PremiumAmount).GreaterThan(0);
-        RuleFor(x => x.CoverageStart)
-            .GreaterThan(default(DateOnly))
-            .WithMessage("CoverageStart is required.");
-        RuleFor(x => x.CoverageEnd)
-            .GreaterThan(default(DateOnly))
-            .WithMessage("CoverageEnd is required.");
-        RuleFor(x => x.CoverageEnd)
-            .Must((req, end) => end > req.CoverageStart)
-            .WithMessage("CoverageEnd must be greater than CoverageStart.");
-
         RuleFor(x => x.Status)
             .NotEmpty()
-            .Must(s => s is "Ativa" or "Cancelada" or "Expirada")
+            .Must(BeKnownStatus)
             .WithMessage("Status must be one of: Ativa, Cancelada, Expirada.");
 
         RuleFor(x => x.StatusReason)
             .MaximumLength(500)
             .When(x => x.StatusReason is not null);
     }
+
+    private static bool BeKnownStatus(string? raw) =>
+        !string.IsNullOrWhiteSpace(raw)
+        && Enum.TryParse<PolicyStatus>(raw, ignoreCase: true, out var status)
+        && Enum.IsDefined(status);
 }

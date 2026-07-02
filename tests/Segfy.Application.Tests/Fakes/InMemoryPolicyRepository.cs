@@ -99,4 +99,7 @@ public sealed class InMemoryPolicyRepository : IPolicyRepository
             : policy.StatusHistory.OrderBy(h => h.ChangedAt).ToList();
         return Task.FromResult(result);
     }
+
+    public Task SaveExpirationBatchAsync(IReadOnlyCollection<Policy> policies, CancellationToken ct) =>
+        Task.CompletedTask;
 }

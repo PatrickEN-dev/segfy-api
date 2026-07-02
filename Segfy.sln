@@ -19,6 +19,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Segfy.Domain.Tests", "tests
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Segfy.Application.Tests", "tests\Segfy.Application.Tests\Segfy.Application.Tests.csproj", "{300AC0FB-8523-4B25-876F-F0E21D3B3815}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Segfy.Api.IntegrationTests", "tests\Segfy.Api.IntegrationTests\Segfy.Api.IntegrationTests.csproj", "{A2FBA2C0-AD32-4C3C-A1D5-6EA8A042920E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -52,6 +54,10 @@ Global
 		{300AC0FB-8523-4B25-876F-F0E21D3B3815}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{300AC0FB-8523-4B25-876F-F0E21D3B3815}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{300AC0FB-8523-4B25-876F-F0E21D3B3815}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A2FBA2C0-AD32-4C3C-A1D5-6EA8A042920E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A2FBA2C0-AD32-4C3C-A1D5-6EA8A042920E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A2FBA2C0-AD32-4C3C-A1D5-6EA8A042920E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A2FBA2C0-AD32-4C3C-A1D5-6EA8A042920E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{E194CF5B-F868-4C9B-B237-D2AF7D0A0022} = {78016D80-D138-47A5-BBFF-3F67A94ADA81}
@@ -60,5 +66,6 @@ Global
 		{D882229C-E3D6-4864-B75C-9128EAA431EF} = {78016D80-D138-47A5-BBFF-3F67A94ADA81}
 		{FCE2CD5B-5F94-4E50-B307-956C4257E393} = {82BD7833-1922-4650-BAB6-7D89F46CF10E}
 		{300AC0FB-8523-4B25-876F-F0E21D3B3815} = {82BD7833-1922-4650-BAB6-7D89F46CF10E}
+		{A2FBA2C0-AD32-4C3C-A1D5-6EA8A042920E} = {82BD7833-1922-4650-BAB6-7D89F46CF10E}
 	EndGlobalSection
 EndGlobal

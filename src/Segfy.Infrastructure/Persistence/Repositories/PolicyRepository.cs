@@ -1,6 +1,7 @@
 using System.Globalization;
-using System.Text;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Segfy.Domain.Common.Errors;
 using Segfy.Domain.Policies;
 using Segfy.Domain.Policies.Abstractions;
 
@@ -8,6 +9,9 @@ namespace Segfy.Infrastructure.Persistence.Repositories;
 
 public sealed class PolicyRepository : IPolicyRepository
 {
+    private const string ActivePlateConflictMarker = "Policies.LicensePlate";
+    private const int SqliteConstraintErrorCode = 19;
+
     private readonly SegfyDbContext _db;
 
     public PolicyRepository(SegfyDbContext db)
@@ -15,114 +19,99 @@ public sealed class PolicyRepository : IPolicyRepository
         _db = db;
     }
 
-    public async Task AddAsync(Policy policy, CancellationToken ct)
+    public Task AddAsync(Policy policy, CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(policy);
         _db.Policies.Add(policy);
-        await _db.SaveChangesAsync(ct);
+        return SaveWithConstraintTranslationAsync(policy, ct);
     }
 
     public Task<Policy?> FindByIdAsync(Guid id, CancellationToken ct) =>
-        _db.Policies
-            .Include(p => p.StatusHistory)
-            .FirstOrDefaultAsync(p => p.Id == id, ct);
+        _db.Policies.FirstOrDefaultAsync(p => p.Id == id, ct);
 
     public async Task<(IReadOnlyList<Policy> Items, int Total)> ListAsync(
         PolicyListQuery query, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        var where = new StringBuilder();
-        var parameters = new List<object>();
+        var (whereClause, filterParams) = BuildWhereClause(query);
+        var orderBy = $"{OrderColumn(query.SortBy)} {(query.SortDir == SortDirection.Asc ? "ASC" : "DESC")}";
 
-        void AppendCondition(string columnCondition, object value)
-        {
-            where.Append(where.Length == 0 ? " WHERE " : " AND ");
-            where.AppendFormat(CultureInfo.InvariantCulture, columnCondition, parameters.Count);
-            parameters.Add(value);
-        }
+#pragma warning disable EF1002 // SQL string is server-controlled; only positional params carry user input.
+        var total = await _db.Database
+            .SqlQueryRaw<int>($"SELECT COUNT(*) AS Value FROM Policies{whereClause}", filterParams.ToArray())
+            .SingleAsync(ct);
+#pragma warning restore EF1002
 
-        if (query.Status is { } status)
-            AppendCondition("Status = {{{0}}}", status.ToString());
-
-        if (!string.IsNullOrWhiteSpace(query.DocumentContains))
-            AppendCondition("Document LIKE {{{0}}}", $"%{query.DocumentContains.Trim()}%");
-
-        if (!string.IsNullOrWhiteSpace(query.LicensePlateContains))
-            AppendCondition("LicensePlate LIKE {{{0}}}", $"%{query.LicensePlateContains.Trim().ToUpperInvariant()}%");
-
-        if (!string.IsNullOrWhiteSpace(query.NumberContains))
-            AppendCondition("Number LIKE {{{0}}}", $"%{query.NumberContains.Trim().ToUpperInvariant()}%");
-
-        var orderByColumn = query.SortBy switch
-        {
-            PolicySortField.CoverageEnd => "CoverageEnd",
-            PolicySortField.Premium => "PremiumAmount",
-            _ => "CreatedAt",
-        };
-        var orderByDir = query.SortDir == SortDirection.Asc ? "ASC" : "DESC";
-
-        var whereClause = where.ToString();
-        var countSql = $"SELECT COUNT(*) FROM Policies{whereClause}";
-        var total = await ExecuteScalarIntAsync(countSql, parameters, ct);
-
-        var pageParamIndex = parameters.Count;
-        var offsetParamIndex = parameters.Count + 1;
-        parameters.Add(query.PageSize);
-        parameters.Add((query.Page - 1) * query.PageSize);
-
-        var listSql = $"SELECT * FROM Policies{whereClause} ORDER BY {orderByColumn} {orderByDir} LIMIT {{{pageParamIndex}}} OFFSET {{{offsetParamIndex}}}";
+        var pageParams = filterParams.Concat(new object[] { query.PageSize, (query.Page - 1) * query.PageSize }).ToArray();
+        var listSql = $"SELECT * FROM Policies{whereClause} ORDER BY {orderBy} LIMIT {{{filterParams.Count}}} OFFSET {{{filterParams.Count + 1}}}";
 
         var items = await _db.Policies
-            .FromSqlRaw(listSql, parameters.ToArray())
+            .FromSqlRaw(listSql, pageParams)
             .AsNoTracking()
             .ToListAsync(ct);
 
         return (items, total);
     }
 
-    private async Task<int> ExecuteScalarIntAsync(
-        string sql, IReadOnlyList<object> parameters, CancellationToken ct)
+    private static (string WhereClause, List<object> Params) BuildWhereClause(PolicyListQuery query)
     {
-        var connection = _db.Database.GetDbConnection();
-        var mustOpen = connection.State != System.Data.ConnectionState.Open;
-        if (mustOpen)
-            await connection.OpenAsync(ct);
+        var conditions = new List<string>();
+        var parameters = new List<object>();
 
-        try
+        void AddLike(string columnSql, string rawValue)
         {
-            await using var command = connection.CreateCommand();
-            command.CommandText = ReplacePositionalPlaceholders(sql, parameters.Count);
-            for (var i = 0; i < parameters.Count; i++)
-            {
-                var p = command.CreateParameter();
-                p.ParameterName = $"@p{i}";
-                p.Value = parameters[i];
-                command.Parameters.Add(p);
-            }
+            conditions.Add(string.Format(CultureInfo.InvariantCulture, columnSql, parameters.Count));
+            parameters.Add($"%{EscapeLikePattern(rawValue)}%");
+        }
 
-            var result = await command.ExecuteScalarAsync(ct);
-            return Convert.ToInt32(result, CultureInfo.InvariantCulture);
-        }
-        finally
+        void AddEquals(string columnSql, object value)
         {
-            if (mustOpen)
-                await connection.CloseAsync();
+            conditions.Add(string.Format(CultureInfo.InvariantCulture, columnSql, parameters.Count));
+            parameters.Add(value);
         }
+
+        if (query.Status is { } status)
+            AddEquals("Status = {{{0}}}", status.ToString());
+        if (!string.IsNullOrWhiteSpace(query.DocumentContains))
+            AddLike("Document LIKE {{{0}}} ESCAPE '\\'", query.DocumentContains.Trim());
+        if (!string.IsNullOrWhiteSpace(query.LicensePlateContains))
+            AddLike("LicensePlate LIKE {{{0}}} ESCAPE '\\'", query.LicensePlateContains.Trim().ToUpperInvariant());
+        if (!string.IsNullOrWhiteSpace(query.NumberContains))
+            AddLike("Number LIKE {{{0}}} ESCAPE '\\'", query.NumberContains.Trim().ToUpperInvariant());
+
+        var whereClause = conditions.Count == 0 ? string.Empty : " WHERE " + string.Join(" AND ", conditions);
+        return (whereClause, parameters);
     }
 
-    private static string ReplacePositionalPlaceholders(string sql, int count)
-    {
-        var result = sql;
-        for (var i = 0; i < count; i++)
-            result = result.Replace($"{{{i}}}", $"@p{i}", StringComparison.Ordinal);
-        return result;
-    }
+    private static string EscapeLikePattern(string input) =>
+        input.Replace("\\", "\\\\", StringComparison.Ordinal)
+             .Replace("%", "\\%", StringComparison.Ordinal)
+             .Replace("_", "\\_", StringComparison.Ordinal);
 
-    public Task UpdateAsync(Policy policy, CancellationToken ct) =>
-        _db.SaveChangesAsync(ct);
+    private static string OrderColumn(PolicySortField sortBy) => sortBy switch
+    {
+        PolicySortField.CoverageEnd => "CoverageEnd",
+        PolicySortField.Premium => "PremiumAmount",
+        _ => "CreatedAt",
+    };
+
+    public Task UpdateAsync(Policy policy, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+
+        foreach (var history in policy.StatusHistory)
+        {
+            if (_db.Entry(history).State == EntityState.Detached)
+                _db.PolicyStatusHistory.Add(history);
+        }
+
+        return SaveWithConstraintTranslationAsync(policy, ct);
+    }
 
     public async Task RemoveAsync(Policy policy, CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(policy);
         _db.Policies.Remove(policy);
         await _db.SaveChangesAsync(ct);
     }
@@ -140,7 +129,7 @@ public sealed class PolicyRepository : IPolicyRepository
                     AND CoverageEnd >= {1}
                     AND CoverageEnd <= {2}
                   ORDER BY CoverageEnd ASC",
-                "Ativa", todayStr, cutoffStr)
+                nameof(PolicyStatus.Ativa), todayStr, cutoffStr)
             .AsNoTracking()
             .ToListAsync(ct);
     }
@@ -148,14 +137,16 @@ public sealed class PolicyRepository : IPolicyRepository
     public async Task<bool> ExistsActiveByPlateAsync(
         string plateValue, Guid? excludePolicyId, CancellationToken ct)
     {
-        var sql = new StringBuilder("SELECT COUNT(*) FROM Policies WHERE Status = {0} AND LicensePlate = {1}");
-        var parameters = new List<object> { "Ativa", plateValue };
+        var sql = "SELECT COUNT(*) AS Value FROM Policies WHERE Status = {0} AND LicensePlate = {1}";
+        var parameters = new List<object> { nameof(PolicyStatus.Ativa), plateValue };
         if (excludePolicyId is { } id)
         {
-            sql.Append(" AND Id <> {2}");
+            sql += " AND Id <> {2}";
             parameters.Add(id.ToString());
         }
-        var count = await ExecuteScalarIntAsync(sql.ToString(), parameters, ct);
+#pragma warning disable EF1002 // SQL string is server-controlled; only positional params carry user input.
+        var count = await _db.Database.SqlQueryRaw<int>(sql, parameters.ToArray()).SingleAsync(ct);
+#pragma warning restore EF1002
         return count > 0;
     }
 
@@ -169,8 +160,7 @@ public sealed class PolicyRepository : IPolicyRepository
                   WHERE Status = {0}
                     AND CoverageEnd < {1}
                   ORDER BY CoverageEnd ASC",
-                "Ativa", todayStr)
-            .Include(p => p.StatusHistory)
+                nameof(PolicyStatus.Ativa), todayStr)
             .AsTracking()
             .ToListAsync(ct);
     }
@@ -182,4 +172,41 @@ public sealed class PolicyRepository : IPolicyRepository
             .Where(h => h.PolicyId == policyId)
             .OrderBy(h => h.ChangedAt)
             .ToListAsync(ct);
+
+    public async Task SaveExpirationBatchAsync(IReadOnlyCollection<Policy> policies, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(policies);
+        if (policies.Count == 0) return;
+
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+
+        foreach (var policy in policies)
+        foreach (var history in policy.StatusHistory)
+        {
+            if (_db.Entry(history).State == EntityState.Detached)
+                _db.PolicyStatusHistory.Add(history);
+        }
+
+        await _db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+    }
+
+    private async Task SaveWithConstraintTranslationAsync(Policy policy, CancellationToken ct)
+    {
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (IsActivePlateConflict(ex))
+        {
+            _db.ChangeTracker.Clear();
+            throw new DomainValidationException(
+                $"There is already an active policy for vehicle {policy.LicensePlate.Value}.");
+        }
+    }
+
+    private static bool IsActivePlateConflict(DbUpdateException ex) =>
+        ex.InnerException is SqliteException sqlite
+        && sqlite.SqliteErrorCode == SqliteConstraintErrorCode
+        && sqlite.Message.Contains(ActivePlateConflictMarker, StringComparison.Ordinal);
 }

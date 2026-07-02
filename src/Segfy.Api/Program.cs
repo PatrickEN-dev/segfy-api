@@ -36,27 +36,34 @@ try
     app.MapControllers();
     app.MapSegfyHealth();
 
-    if (app.Environment.IsDevelopment())
+    using (var scope = app.Services.CreateScope())
     {
-        using var scope = app.Services.CreateScope();
         var serviceProvider = scope.ServiceProvider;
         serviceProvider.GetRequiredService<SegfyDbContext>().Database.Migrate();
 
-        var db = serviceProvider.GetRequiredService<SegfyDbContext>();
-        var clock = serviceProvider.GetRequiredService<IClock>();
-        var sequence = serviceProvider.GetRequiredService<IPolicyNumberSequence>();
-        await SegfyDbSeeder.SeedDevAsync(db, clock, sequence, CancellationToken.None);
+        if (app.Environment.IsDevelopment())
+        {
+            var db = serviceProvider.GetRequiredService<SegfyDbContext>();
+            var clock = serviceProvider.GetRequiredService<IClock>();
+            var sequence = serviceProvider.GetRequiredService<IPolicyNumberSequence>();
+            await SegfyDbSeeder.SeedDevAsync(db, clock, sequence, CancellationToken.None);
+        }
     }
 
     app.Run();
+    return 0;
 }
 #pragma warning disable CA1031 // Fatal boot failure — must catch everything to log and flush.
 catch (Exception ex)
 #pragma warning restore CA1031
 {
     Log.Fatal(ex, "Boot failed");
+    return 1;
 }
 finally
 {
     Log.CloseAndFlush();
 }
+
+// Exposed as partial for WebApplicationFactory<Program> in integration tests.
+public partial class Program;
