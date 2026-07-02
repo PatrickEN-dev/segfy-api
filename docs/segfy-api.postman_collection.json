@@ -1,0 +1,451 @@
+{
+  "info": {
+    "_postman_id": "b2f31e0c-4d1e-4f4a-9a5a-8f9a1e2b3c4d",
+    "name": "Segfy Policies API",
+    "description": "Coleção completa da Segfy Policies API. Compatível com Postman v2.1 e importação nativa no Insomnia (File > Import).\n\n### Como usar\n1. Importe este arquivo.\n2. Importe também o `segfy-api.postman_environment.json` e ative como ambiente.\n3. Suba a API local (`dotnet run --project src/Segfy.Api` ou `docker compose up -d --build`).\n4. Rode os requests da pasta **Fluxo principal** de cima pra baixo. O POST Create grava `policyId` no ambiente automaticamente — os requests seguintes já apontam pra apólice recém-criada.\n\n### Variáveis\n- `baseUrl`: raiz da API (default `http://localhost:8080`).\n- `apiPrefix`: prefixo versionado (`/api/v1`).\n- `policyId`: preenchido pelo test script do POST Create.\n\n### Erros esperados por rota\nA pasta **Cenários de erro** exercita 400/404/422 para validar o contrato `{ error: { code, message, requestId, details } }`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Verifica se a API e o SQLite estão saudáveis. Retorna 200 quando tudo OK, 503 quando o DbContext falha o probe."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /docs (Swagger UI)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/docs",
+              "host": ["{{baseUrl}}"],
+              "path": ["docs"]
+            },
+            "description": "Página do Swagger UI. Útil para navegação exploratória. Espera 200 com HTML."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Fluxo principal",
+      "description": "Sequência ordenada: cria uma apólice, lê, atualiza, cancela e consulta histórico. Rode do primeiro ao último.",
+      "item": [
+        {
+          "name": "1. POST /policies (Create)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Grava policyId no ambiente pra reaproveitar nos próximos requests.",
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('resposta traz id e number', () => {",
+                  "  pm.expect(body.id).to.be.a('string');",
+                  "  pm.expect(body.number).to.match(/^SEG-\\d{4}-\\d{4,}$/);",
+                  "});",
+                  "pm.environment.set('policyId', body.id);",
+                  "pm.environment.set('policyNumber', body.number);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document\": \"52998224725\",\n  \"licensePlate\": \"ABC1234\",\n  \"premiumAmount\": 249.90,\n  \"coverageStart\": \"2026-08-01\",\n  \"coverageEnd\": \"2027-07-31\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/policies",
+              "host": ["{{baseUrl}}{{apiPrefix}}"],
+              "path": ["policies"]
+            },
+            "description": "Cria uma nova apólice. Documento aceita CPF (11 dígitos) ou CNPJ (14 dígitos) — validação real de dígito verificador. Placa aceita padrão antigo (ABC1234) ou Mercosul (ABC1D23). Status inicial sempre `Ativa`."
+          },
+          "response": []
+        },
+        {
+          "name": "2. GET /policies/{id}",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/policies/{{policyId}}",
+              "host": ["{{baseUrl}}{{apiPrefix}}"],
+              "path": ["policies", "{{policyId}}"]
+            },
+            "description": "Lê a apólice criada no request anterior."
+          },
+          "response": []
+        },
+        {
+          "name": "3. GET /policies (List — default)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/policies?page=1&pageSize=20",
+              "host": ["{{baseUrl}}{{apiPrefix}}"],
+              "path": ["policies"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" }
+              ]
+            },
+            "description": "Lista paginada. Default sortBy=createdAt, sortDir=desc."
+          },
+          "response": []
+        },
+        {
+          "name": "4. GET /policies (List — filtered + sorted)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/policies?page=1&pageSize=10&status=Ativa&sortBy=coverageEnd&sortDir=asc",
+              "host": ["{{baseUrl}}{{apiPrefix}}"],
+              "path": ["policies"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "10" },
+                { "key": "status", "value": "Ativa", "description": "Ativa | Cancelada | Expirada (case-insensitive)" },
+                { "key": "sortBy", "value": "coverageEnd", "description": "createdAt | coverageEnd | premium" },
+                { "key": "sortDir", "value": "asc", "description": "asc | desc" }
+              ]
+            },
+            "description": "Lista apenas apólices ativas, ordenadas pela data de término da cobertura crescente."
+          },
+          "response": []
+        },
+        {
+          "name": "5. GET /policies (List — search by document)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/policies?document=529&pageSize=5",
+              "host": ["{{baseUrl}}{{apiPrefix}}"],
+              "path": ["policies"],
+              "query": [
+                { "key": "document", "value": "529", "description": "Busca parcial (LIKE %valor%). Wildcards % e _ são escapados." },
+                { "key": "pageSize", "value": "5" }
+              ]
+            },
+            "description": "Busca por substring no documento. Também aceita licensePlate e number."
+          },
+          "response": []
+        },
+        {
+          "name": "6. GET /policies/expiring",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/policies/expiring",
+              "host": ["{{baseUrl}}{{apiPrefix}}"],
+              "path": ["policies", "expiring"]
+            },
+            "description": "Apólices Ativas cujo `coverageEnd` cai dentro da janela `ExpiringWindowDays` (default 30). Implementação usa SQL cru (`FromSqlRaw`) conforme requisito do PDF."
+          },
+          "response": []
+        },
+        {
+          "name": "7. PUT /policies/{id} (Update details)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document\": \"52998224725\",\n  \"licensePlate\": \"ABC1234\",\n  \"premiumAmount\": 289.90,\n  \"coverageStart\": \"2026-08-01\",\n  \"coverageEnd\": \"2027-07-31\",\n  \"status\": \"Ativa\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/policies/{{policyId}}",
+              "host": ["{{baseUrl}}{{apiPrefix}}"],
+              "path": ["policies", "{{policyId}}"]
+            },
+            "description": "Atualiza dados da apólice mantendo status Ativa. Só permitido enquanto o status é Ativa (regra de negócio). Alterar premiumAmount neste request."
+          },
+          "response": []
+        },
+        {
+          "name": "8. PUT /policies/{id} (Cancel)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document\": \"52998224725\",\n  \"licensePlate\": \"ABC1234\",\n  \"premiumAmount\": 289.90,\n  \"coverageStart\": \"2026-08-01\",\n  \"coverageEnd\": \"2027-07-31\",\n  \"status\": \"Cancelada\",\n  \"statusReason\": \"customer request\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/policies/{{policyId}}",
+              "host": ["{{baseUrl}}{{apiPrefix}}"],
+              "path": ["policies", "{{policyId}}"]
+            },
+            "description": "Cancela a apólice. Transição `Ativa → Cancelada` (state machine). Gera entrada no histórico com o motivo informado."
+          },
+          "response": []
+        },
+        {
+          "name": "9. GET /policies/{id}/history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/policies/{{policyId}}/history",
+              "host": ["{{baseUrl}}{{apiPrefix}}"],
+              "path": ["policies", "{{policyId}}", "history"]
+            },
+            "description": "Lista o histórico de mudanças de status. Após o request 8, deve mostrar Ativa → Cancelada com o reason."
+          },
+          "response": []
+        },
+        {
+          "name": "10. DELETE /policies/{id}",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));",
+                  "pm.environment.unset('policyId');",
+                  "pm.environment.unset('policyNumber');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/policies/{{policyId}}",
+              "host": ["{{baseUrl}}{{apiPrefix}}"],
+              "path": ["policies", "{{policyId}}"]
+            },
+            "description": "Remove a apólice em definitivo. Retorna 204. Limpa as vars de ambiente."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Payloads alternativos",
+      "description": "Exemplos prontos para diferentes cenários de criação.",
+      "item": [
+        {
+          "name": "POST CNPJ + placa Mercosul",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document\": \"11222333000181\",\n  \"licensePlate\": \"XYZ1A23\",\n  \"premiumAmount\": 1200.00,\n  \"coverageStart\": \"2026-09-01\",\n  \"coverageEnd\": \"2027-08-31\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/policies",
+              "host": ["{{baseUrl}}{{apiPrefix}}"],
+              "path": ["policies"]
+            },
+            "description": "Cria apólice para pessoa jurídica com placa no padrão Mercosul (ABC1D23)."
+          },
+          "response": []
+        },
+        {
+          "name": "POST expirando em breve (aparece no /expiring)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document\": \"39053344705\",\n  \"licensePlate\": \"DEF2G34\",\n  \"premiumAmount\": 199.50,\n  \"coverageStart\": \"2026-01-01\",\n  \"coverageEnd\": \"2026-07-15\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/policies",
+              "host": ["{{baseUrl}}{{apiPrefix}}"],
+              "path": ["policies"]
+            },
+            "description": "Data de fim próxima. Após criar, chame `/policies/expiring` para ver esta apólice listada."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Cenários de erro",
+      "description": "Requests inválidos que exercitam o contrato `{ error: { code, message, requestId, details } }` e cada código de erro.",
+      "item": [
+        {
+          "name": "400 VALIDATION_ERROR — campos faltando",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document\": \"\",\n  \"licensePlate\": \"\",\n  \"premiumAmount\": 0,\n  \"coverageStart\": \"2026-08-01\",\n  \"coverageEnd\": \"2026-07-01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/policies",
+              "host": ["{{baseUrl}}{{apiPrefix}}"],
+              "path": ["policies"]
+            },
+            "description": "FluentValidation dispara — documento vazio, placa vazia, premium <= 0, coverageEnd anterior ao start. Espera 400 com `code: VALIDATION_ERROR` e `details` por campo."
+          },
+          "response": []
+        },
+        {
+          "name": "400 DOMAIN_VALIDATION — CPF inválido",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document\": \"00000000000\",\n  \"licensePlate\": \"ZZZ1234\",\n  \"premiumAmount\": 100.00,\n  \"coverageStart\": \"2026-08-01\",\n  \"coverageEnd\": \"2027-07-31\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/policies",
+              "host": ["{{baseUrl}}{{apiPrefix}}"],
+              "path": ["policies"]
+            },
+            "description": "Passa no MaximumLength/NotEmpty mas falha na validação de dígito verificador do Value Object Document. 400 com `code: DOMAIN_VALIDATION`."
+          },
+          "response": []
+        },
+        {
+          "name": "400 DOMAIN_VALIDATION — placa duplicada",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Este cenário assume que já existe uma apólice Ativa com placa ABC1234.",
+                  "// Rode antes o request 'POST /policies (Create)' do Fluxo principal."
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document\": \"39053344705\",\n  \"licensePlate\": \"ABC1234\",\n  \"premiumAmount\": 300.00,\n  \"coverageStart\": \"2026-09-01\",\n  \"coverageEnd\": \"2027-08-31\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/policies",
+              "host": ["{{baseUrl}}{{apiPrefix}}"],
+              "path": ["policies"]
+            },
+            "description": "Só pode haver uma apólice Ativa por placa. 400 com mensagem `There is already an active policy for vehicle ABC1234`."
+          },
+          "response": []
+        },
+        {
+          "name": "404 NOT_FOUND — id inexistente",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/policies/00000000-0000-0000-0000-000000000000",
+              "host": ["{{baseUrl}}{{apiPrefix}}"],
+              "path": ["policies", "00000000-0000-0000-0000-000000000000"]
+            },
+            "description": "GUID que não existe. 404 com `code: NOT_FOUND`."
+          },
+          "response": []
+        },
+        {
+          "name": "422 INVALID_STATE — cancelar apólice já cancelada",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document\": \"52998224725\",\n  \"licensePlate\": \"ABC1234\",\n  \"premiumAmount\": 289.90,\n  \"coverageStart\": \"2026-08-01\",\n  \"coverageEnd\": \"2027-07-31\",\n  \"status\": \"Ativa\",\n  \"statusReason\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/policies/{{policyId}}",
+              "host": ["{{baseUrl}}{{apiPrefix}}"],
+              "path": ["policies", "{{policyId}}"]
+            },
+            "description": "Tenta reativar apólice Cancelada. State machine só permite `Ativa → Cancelada` e `Ativa → Expirada`. 422 com `code: INVALID_STATE`. Requer que `policyId` aponte para uma apólice já cancelada (rode os requests 1 e 8 do Fluxo principal antes)."
+          },
+          "response": []
+        },
+        {
+          "name": "400 VALIDATION_ERROR — sortBy inválido",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}{{apiPrefix}}/policies?sortBy=nome",
+              "host": ["{{baseUrl}}{{apiPrefix}}"],
+              "path": ["policies"],
+              "query": [
+                { "key": "sortBy", "value": "nome" }
+              ]
+            },
+            "description": "Campo de ordenação fora da whitelist (createdAt, coverageEnd, premium). 400 com detalhe."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "apiPrefix",
+      "value": "/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "policyId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "policyNumber",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

@@ -8,11 +8,14 @@
 **/*.db-shm
 **/*.db-wal
 .git/
+.github/
 .gitignore
 .editorconfig
 LICENSE
 README.md
 sdd/
+docs/
+tests/
 docker-compose.yml
 Dockerfile
 .dockerignore

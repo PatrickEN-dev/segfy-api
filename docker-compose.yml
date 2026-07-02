@@ -1,9 +1,18 @@
 services:
   api:
-    build: .
+    build:
+      context: .
+      # Explicit platform avoids silent qemu emulation on Apple Silicon,
+      # which slows the container 5-10x. Override with API_PLATFORM=linux/arm64
+      # if you're actually running on ARM hardware.
+      platforms:
+        - ${API_PLATFORM:-linux/amd64}
     image: segfy-api:local
     container_name: segfy-api
     restart: unless-stopped
+    # tini as PID 1 so SIGTERM/SIGINT propagate to dotnet; graceful shutdown
+    # without the default 10s Docker kill timeout.
+    init: true
     ports:
       - "${API_PORT:-8080}:8080"
     environment:
@@ -14,6 +23,13 @@ services:
       Segfy__AutoExpirationIntervalSeconds: ${AUTO_EXPIRATION_INTERVAL_SECONDS:-3600}
     volumes:
       - segfy-data:/app/data
+    # Soft limits reveal the API's real footprint under load and prevent a
+    # runaway process from starving the host. Tune with API_MEM_LIMIT / API_CPU_LIMIT.
+    deploy:
+      resources:
+        limits:
+          memory: ${API_MEM_LIMIT:-256M}
+          cpus: ${API_CPU_LIMIT:-0.50}
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
       interval: 30s

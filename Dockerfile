@@ -4,19 +4,28 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
+# Copy csproj and props first — restore layer caches unless a project file changes.
 COPY Directory.Build.props global.json ./
-COPY src/Segfy.Api/Segfy.Api.csproj              src/Segfy.Api/
-COPY src/Segfy.Application/Segfy.Application.csproj      src/Segfy.Application/
-COPY src/Segfy.Domain/Segfy.Domain.csproj                src/Segfy.Domain/
+COPY src/Segfy.Api/Segfy.Api.csproj                       src/Segfy.Api/
+COPY src/Segfy.Application/Segfy.Application.csproj       src/Segfy.Application/
+COPY src/Segfy.Domain/Segfy.Domain.csproj                 src/Segfy.Domain/
 COPY src/Segfy.Infrastructure/Segfy.Infrastructure.csproj src/Segfy.Infrastructure/
 
-RUN dotnet restore src/Segfy.Api/Segfy.Api.csproj
+# BuildKit cache mount: NuGet packages persist across builds. Local rebuilds skip
+# re-download; CI benefits alongside the GHA layer cache.
+RUN --mount=type=cache,id=nuget,target=/root/.nuget/packages \
+    dotnet restore src/Segfy.Api/Segfy.Api.csproj
 
 COPY src/ src/
-RUN dotnet publish src/Segfy.Api/Segfy.Api.csproj \
+
+# ReadyToRun: precompiled native code for hot methods. Cuts cold-start ~20-40%,
+# critical for free-tier hosts (Render/Fly) that sleep the instance.
+RUN --mount=type=cache,id=nuget,target=/root/.nuget/packages \
+    dotnet publish src/Segfy.Api/Segfy.Api.csproj \
     -c Release \
     -o /app/publish \
     /p:UseAppHost=false \
+    /p:PublishReadyToRun=true \
     --no-restore
 
 # ---------- Runtime stage ----------
@@ -37,9 +46,13 @@ COPY --from=build --chown=segfy:segfy /app/publish ./
 
 VOLUME ["/app/data"]
 
+# DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 drops ICU (~30 MB) since our code uses
+# InvariantCulture everywhere. Do NOT enable if you introduce locale-sensitive
+# parsing/formatting elsewhere.
 ENV ASPNETCORE_ENVIRONMENT=Production \
     DOTNET_RUNNING_IN_CONTAINER=true \
     DOTNET_gcServer=1 \
+    DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 \
     ConnectionStrings__Default="Data Source=/app/data/segfy.db;Cache=Shared" \
     Segfy__ExpiringWindowDays=30 \
     Segfy__AutoExpirationEnabled=true \

@@ -49,9 +49,41 @@ apertar "Try it out", preencher os campos e ver a resposta na hora.
 > A primeira request depois de 15 min sem uso pode demorar uns 30 segundos
 > (o servidor "acorda"). As próximas são instantâneas.
 
+> Prefere Postman ou Insomnia? Tem uma coleção pronta em
+> [`docs/`](docs/) com todos os endpoints preenchidos. Veja a
+> [Opção 3](#opção-3-importar-a-coleção-pronta-no-postman-ou-insomnia).
+
 ### Opção 2: Rodar no seu computador
 
 Veja a seção [Como rodar no seu computador](#como-rodar-no-seu-computador).
+
+### Opção 3: Importar a coleção pronta no Postman ou Insomnia
+
+Se você prefere um cliente de API dedicado, tem uma coleção completa em
+[`docs/`](docs/) já com todos os endpoints, bodies de exemplo, filtros
+comuns e cenários de erro (400 / 404 / 422). O `policyId` da apólice
+recém-criada é gravado automaticamente entre requests, então dá para
+executar o fluxo inteiro sem editar nada.
+
+**Arquivos:**
+
+* [`docs/segfy-api.postman_collection.json`](docs/segfy-api.postman_collection.json) — a coleção (formato Postman v2.1, importa nativo no Insomnia).
+* [`docs/segfy-api.postman_environment.json`](docs/segfy-api.postman_environment.json) — ambiente **local** (`http://localhost:8080`).
+* [`docs/segfy-api.remote.postman_environment.json`](docs/segfy-api.remote.postman_environment.json) — ambiente **Render** (edite `baseUrl` com o link do deploy).
+
+**Como importar:**
+
+* **Insomnia:** `Application` → `Preferences` → `Data` → `Import Data` → `From File`, selecione os 3 arquivos. Depois ative o ambiente no seletor do canto superior.
+* **Postman:** botão `Import` no topo, arraste os 3 arquivos. Ative o ambiente no dropdown do canto superior direito.
+
+**Estrutura da coleção:**
+
+| Pasta | O que tem |
+|---|---|
+| Health | `/health` e `/docs` (Swagger) |
+| Fluxo principal | 10 requests numerados: create → get → list → filtros → expiring → update → cancel → history → delete. Rode de cima para baixo. |
+| Payloads alternativos | CNPJ + placa Mercosul, apólice vencendo em breve |
+| Cenários de erro | Um request para cada código do contrato de erro |
 
 ---
 
