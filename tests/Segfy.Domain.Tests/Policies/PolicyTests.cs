@@ -127,6 +127,22 @@ public sealed class PolicyTests
     }
 
     [Fact]
+    public void UpdateDetails_OnExpiredPolicy_ThrowsInvalidState()
+    {
+        var policy = NewActivePolicy();
+        policy.ChangeStatus(PolicyStatus.Expirada, policy.CreatedAt.AddDays(1));
+
+        var act = () => policy.UpdateDetails(
+            Document.Create("39053344705"),
+            LicensePlate.Create("DEF2G34"),
+            Money.Create(249.50m),
+            CoveragePeriod.Create(new DateOnly(2026, 7, 1), new DateOnly(2027, 12, 31)),
+            policy.CreatedAt.AddDays(2));
+
+        act.Should().Throw<DomainInvalidStateException>();
+    }
+
+    [Fact]
     public void ChangeStatus_WithReason_AppendsHistoryEntry()
     {
         var policy = NewActivePolicy();

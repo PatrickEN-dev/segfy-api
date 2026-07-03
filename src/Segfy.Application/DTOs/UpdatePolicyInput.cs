@@ -1,3 +1,5 @@
+using Segfy.Domain.Policies;
+
 namespace Segfy.Application.DTOs;
 
 public sealed record UpdatePolicyInput(
@@ -6,5 +8,5 @@ public sealed record UpdatePolicyInput(
     decimal PremiumAmount,
     DateOnly CoverageStart,
     DateOnly CoverageEnd,
-    string Status,
+    PolicyStatus Status,
     string? StatusReason);

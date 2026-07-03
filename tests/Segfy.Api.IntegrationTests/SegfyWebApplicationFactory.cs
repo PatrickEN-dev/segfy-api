@@ -16,11 +16,10 @@ public sealed class SegfyWebApplicationFactory : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        // Testing environment: seeder does NOT run, background jobs stay off,
-        // and each test file gets its own SQLite file.
-        builder.UseEnvironment("Testing");
+        // Testing: no seed data, no background job, own SQLite file per fixture.
         builder.UseSetting("ConnectionStrings:Default", $"Data Source={_dbPath};Cache=Shared");
         builder.UseSetting("Segfy:AutoExpirationEnabled", "false");
+        builder.UseSetting("Segfy:SeedSampleData", "false");
     }
 
     protected override void Dispose(bool disposing)

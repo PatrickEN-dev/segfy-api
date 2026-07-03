@@ -23,6 +23,19 @@ public sealed class UpdatePolicyUseCaseTests
         return (repo, clock, policy.Id);
     }
 
+    private static UpdatePolicyInput Input(
+        string document = "52998224725",
+        string plate = "ABC1234",
+        decimal premium = 199.90m,
+        DateOnly? start = null,
+        DateOnly? end = null,
+        PolicyStatus status = PolicyStatus.Ativa,
+        string? reason = null) =>
+        new(document, plate, premium,
+            start ?? new DateOnly(2026, 7, 1),
+            end ?? new DateOnly(2027, 6, 30),
+            status, reason);
+
     [Fact]
     public async Task Execute_ValidUpdate_UpdatesFields()
     {
@@ -31,8 +44,8 @@ public sealed class UpdatePolicyUseCaseTests
 
         var updated = await useCase.ExecuteAsync(
             id,
-            new UpdatePolicyInput("39053344705", "DEF2G34", 249.50m,
-                new DateOnly(2026, 7, 1), new DateOnly(2027, 12, 31), "Ativa", null),
+            Input(document: "39053344705", plate: "DEF2G34", premium: 249.50m,
+                end: new DateOnly(2027, 12, 31)),
             CancellationToken.None);
 
         updated.Document.Digits.Should().Be("39053344705");
@@ -49,10 +62,7 @@ public sealed class UpdatePolicyUseCaseTests
         var useCase = new UpdatePolicyUseCase(repo, clock);
 
         var act = async () => await useCase.ExecuteAsync(
-            Guid.NewGuid(),
-            new UpdatePolicyInput("52998224725", "ABC1234", 199.90m,
-                new DateOnly(2026, 7, 1), new DateOnly(2027, 6, 30), "Ativa", null),
-            CancellationToken.None);
+            Guid.NewGuid(), Input(), CancellationToken.None);
 
         await act.Should().ThrowAsync<DomainNotFoundException>();
     }
@@ -63,18 +73,11 @@ public sealed class UpdatePolicyUseCaseTests
         var (repo, clock, id) = await SeedOneAsync();
         var useCase = new UpdatePolicyUseCase(repo, clock);
         await useCase.ExecuteAsync(
-            id,
-            new UpdatePolicyInput("52998224725", "ABC1234", 199.90m,
-                new DateOnly(2026, 7, 1), new DateOnly(2027, 6, 30),
-                nameof(PolicyStatus.Cancelada), "customer request"),
+            id, Input(status: PolicyStatus.Cancelada, reason: "customer request"),
             CancellationToken.None);
 
         var act = async () => await useCase.ExecuteAsync(
-            id,
-            new UpdatePolicyInput("52998224725", "ABC1234", 199.90m,
-                new DateOnly(2026, 7, 1), new DateOnly(2027, 6, 30),
-                nameof(PolicyStatus.Expirada), null),
-            CancellationToken.None);
+            id, Input(status: PolicyStatus.Expirada), CancellationToken.None);
 
         await act.Should().ThrowAsync<DomainInvalidStateException>();
     }
@@ -86,10 +89,7 @@ public sealed class UpdatePolicyUseCaseTests
         var useCase = new UpdatePolicyUseCase(repo, clock);
 
         await useCase.ExecuteAsync(
-            id,
-            new UpdatePolicyInput("52998224725", "ABC1234", 199.90m,
-                new DateOnly(2026, 7, 1), new DateOnly(2027, 6, 30),
-                nameof(PolicyStatus.Cancelada), "non-payment"),
+            id, Input(status: PolicyStatus.Cancelada, reason: "non-payment"),
             CancellationToken.None);
 
         var policy = await repo.FindByIdAsync(id, CancellationToken.None);
@@ -100,22 +100,60 @@ public sealed class UpdatePolicyUseCaseTests
     }
 
     [Fact]
+    public async Task Execute_BlankStatusReason_StoresNullInHistory()
+    {
+        var (repo, clock, id) = await SeedOneAsync();
+        var useCase = new UpdatePolicyUseCase(repo, clock);
+
+        await useCase.ExecuteAsync(
+            id, Input(status: PolicyStatus.Cancelada, reason: "   "),
+            CancellationToken.None);
+
+        var policy = await repo.FindByIdAsync(id, CancellationToken.None);
+        policy!.StatusHistory[0].Reason.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Execute_PaddedStatusReason_IsTrimmed()
+    {
+        var (repo, clock, id) = await SeedOneAsync();
+        var useCase = new UpdatePolicyUseCase(repo, clock);
+
+        await useCase.ExecuteAsync(
+            id, Input(status: PolicyStatus.Cancelada, reason: "  late payment  "),
+            CancellationToken.None);
+
+        var policy = await repo.FindByIdAsync(id, CancellationToken.None);
+        policy!.StatusHistory[0].Reason.Should().Be("late payment");
+    }
+
+    [Fact]
+    public async Task Execute_ChangingCoverageEndToPast_ThrowsDomainValidation()
+    {
+        var (repo, clock, id) = await SeedOneAsync();
+        var useCase = new UpdatePolicyUseCase(repo, clock);
+
+        // FakeClock today is 2026-07-01; moving the end date to before that must fail.
+        var act = async () => await useCase.ExecuteAsync(
+            id, Input(start: new DateOnly(2025, 1, 1), end: new DateOnly(2026, 6, 15)),
+            CancellationToken.None);
+
+        await act.Should().ThrowAsync<DomainValidationException>()
+            .WithMessage("*earlier than today*");
+    }
+
+    [Fact]
     public async Task Execute_UpdateDetailsOnCancelledPolicy_ThrowsInvalidState()
     {
         var (repo, clock, id) = await SeedOneAsync();
         var useCase = new UpdatePolicyUseCase(repo, clock);
         await useCase.ExecuteAsync(
-            id,
-            new UpdatePolicyInput("52998224725", "ABC1234", 199.90m,
-                new DateOnly(2026, 7, 1), new DateOnly(2027, 6, 30),
-                nameof(PolicyStatus.Cancelada), null),
-            CancellationToken.None);
+            id, Input(status: PolicyStatus.Cancelada), CancellationToken.None);
 
         var act = async () => await useCase.ExecuteAsync(
             id,
-            new UpdatePolicyInput("39053344705", "DEF2G34", 249.50m,
-                new DateOnly(2026, 7, 1), new DateOnly(2027, 12, 31),
-                nameof(PolicyStatus.Cancelada), null),
+            Input(document: "39053344705", plate: "DEF2G34", premium: 249.50m,
+                end: new DateOnly(2027, 12, 31), status: PolicyStatus.Cancelada),
             CancellationToken.None);
 
         await act.Should().ThrowAsync<DomainInvalidStateException>();

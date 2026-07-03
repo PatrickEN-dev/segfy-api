@@ -38,4 +38,15 @@ public sealed class GetPolicyByIdUseCaseTests
 
         await act.Should().ThrowAsync<DomainNotFoundException>();
     }
+
+    [Fact]
+    public async Task Execute_EmptyGuid_ThrowsNotFound()
+    {
+        var repo = new InMemoryPolicyRepository();
+        var useCase = new GetPolicyByIdUseCase(repo);
+
+        var act = async () => await useCase.ExecuteAsync(Guid.Empty, CancellationToken.None);
+
+        await act.Should().ThrowAsync<DomainNotFoundException>();
+    }
 }

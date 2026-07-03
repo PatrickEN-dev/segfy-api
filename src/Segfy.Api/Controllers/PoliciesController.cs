@@ -113,9 +113,11 @@ public sealed class PoliciesController : ControllerBase
         CancellationToken ct)
     {
         await _updateValidator.ValidateAndThrowAsync(request, ct);
+        // Safe to Parse: the validator has already rejected unknown status values.
+        var status = Enum.Parse<PolicyStatus>(request.Status, ignoreCase: true);
         var policy = await _update.ExecuteAsync(id,
             new UpdatePolicyInput(request.Document, request.LicensePlate, request.PremiumAmount,
-                request.CoverageStart, request.CoverageEnd, request.Status, request.StatusReason), ct);
+                request.CoverageStart, request.CoverageEnd, status, request.StatusReason), ct);
         return Ok(PolicyPresenter.ToResponse(policy));
     }
 

@@ -63,6 +63,26 @@ public sealed class CreatePolicyUseCaseTests
     }
 
     [Fact]
+    public async Task Execute_WithCoverageEndInThePast_ThrowsDomainValidation()
+    {
+        var repo = new InMemoryPolicyRepository();
+        var clock = new FakeClock(); // today = 2026-07-01
+        var seq = new FakePolicyNumberSequence();
+        var useCase = new CreatePolicyUseCase(repo, seq, clock);
+        var bornExpired = ValidInput() with
+        {
+            CoverageStart = new DateOnly(2025, 1, 1),
+            CoverageEnd = new DateOnly(2026, 6, 30),
+        };
+
+        var act = async () => await useCase.ExecuteAsync(bornExpired, CancellationToken.None);
+
+        await act.Should().ThrowAsync<DomainValidationException>()
+            .WithMessage("*earlier than today*");
+        repo.Snapshot.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task Execute_DuplicateActivePlate_ThrowsDomainValidation()
     {
         var repo = new InMemoryPolicyRepository();

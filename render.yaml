@@ -1,18 +1,16 @@
-# Render Blueprint — https://render.com/docs/blueprint-spec
+# Render Blueprint - https://render.com/docs/blueprint-spec
 #
-# Como usar (recrutador ou eu):
-#   1. Fork/clone este repo no GitHub.
-#   2. No Render Dashboard: New → Blueprint → aponta pra este repo → Apply.
-#   3. Render lê este arquivo, constrói via Dockerfile, provisiona e sobe a API.
-#   4. Após ~3 min: Swagger em https://segfy-api.onrender.com/docs
+# Como usar:
+#   1. Fork/clone deste repo no GitHub.
+#   2. Render Dashboard -> New + -> Blueprint -> aponta pro repo -> Apply.
+#   3. Render le este arquivo, builda o Dockerfile, sobe a API.
+#   4. ~3 min depois: https://segfy-api.onrender.com/docs
 #
-# Notas sobre o Free tier do Render:
-#   - Free web services dormem após 15 min ociosos (primeira request pós-sleep
-#     leva ~30 s). Mantém-se acordado se receber requests periódicos.
-#   - Sem disco persistente (disco custa >= Starter plan). O SQLite vive na
-#     rootFS do container e é reprovisionado a cada deploy/restart —
-#     o `SegfyDbSeeder` roda em Development e popula 6 apólices de exemplo.
-#     Para uso real, aumente para Starter e descomente o bloco `disk` abaixo.
+# Free tier:
+#   - Servico dorme apos 15 min ociosos (primeira request pos-sleep ~30s).
+#   - Sem disco persistente. SQLite fica na rootFS e e reprovisionado a cada
+#     deploy. Segfy__SeedSampleData=true popula 6 apolices de exemplo no boot.
+#   - Para dados persistentes: plano Starter + descomentar o bloco `disk`.
 
 services:
   - type: web
@@ -23,9 +21,6 @@ services:
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health
     envVars:
-      # Development ativa o seeder e o Swagger continua on em ambos os modos.
-      - key: ASPNETCORE_ENVIRONMENT
-        value: Development
       - key: ConnectionStrings__Default
         value: Data Source=/app/data/segfy.db;Cache=Shared
       - key: Segfy__ExpiringWindowDays
@@ -34,8 +29,10 @@ services:
         value: "true"
       - key: Segfy__AutoExpirationIntervalSeconds
         value: "3600"
+      - key: Segfy__SeedSampleData
+        value: "true"
 
-    # Descomente para plano Starter ou superior (persiste SQLite entre deploys):
+    # Descomente no plano Starter+ para persistir o SQLite entre deploys:
     # disk:
     #   name: segfy-data
     #   mountPath: /app/data

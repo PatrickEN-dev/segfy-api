@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Segfy.Api;
 using Segfy.Api.Health;
 using Segfy.Api.Middleware;
 using Segfy.Application;
 using Segfy.Application.Abstractions;
+using Segfy.Application.Configuration;
 using Segfy.Infrastructure;
 using Segfy.Infrastructure.Persistence;
 using Serilog;
@@ -39,14 +41,15 @@ try
     using (var scope = app.Services.CreateScope())
     {
         var serviceProvider = scope.ServiceProvider;
-        serviceProvider.GetRequiredService<SegfyDbContext>().Database.Migrate();
+        var db = serviceProvider.GetRequiredService<SegfyDbContext>();
+        db.Database.Migrate();
 
-        if (app.Environment.IsDevelopment())
+        var options = serviceProvider.GetRequiredService<IOptions<SegfyOptions>>().Value;
+        if (options.SeedSampleData)
         {
-            var db = serviceProvider.GetRequiredService<SegfyDbContext>();
             var clock = serviceProvider.GetRequiredService<IClock>();
             var sequence = serviceProvider.GetRequiredService<IPolicyNumberSequence>();
-            await SegfyDbSeeder.SeedDevAsync(db, clock, sequence, CancellationToken.None);
+            await SegfyDbSeeder.SeedSampleAsync(db, clock, sequence, CancellationToken.None);
         }
     }
 
@@ -54,7 +57,9 @@ try
     return 0;
 }
 #pragma warning disable CA1031 // Fatal boot failure — must catch everything to log and flush.
-catch (Exception ex)
+// HostAbortedException is how `dotnet ef` stops the host at design time; it is
+// not a boot failure and must not be swallowed (or logged as fatal).
+catch (Exception ex) when (ex is not HostAbortedException)
 #pragma warning restore CA1031
 {
     Log.Fatal(ex, "Boot failed");

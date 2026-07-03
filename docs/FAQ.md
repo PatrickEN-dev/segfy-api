@@ -446,16 +446,18 @@ lock) ou uma fila (Hangfire, Quartz). Fora de escopo deste MVP.
 ### Como aplicar as migrations em produção?
 
 Automaticamente. No `Program.cs` chamamos `Database.Migrate()` no boot, em
-qualquer ambiente. No Development também roda o seeder para popular as 6
-apólices de exemplo.
+qualquer ambiente. Se a flag `Segfy__SeedSampleData` estiver `true` (padrão),
+o seeder também popula as 6 apólices de exemplo quando o banco está vazio.
 
 Se preferir controlar manualmente, dá para desativar o `Migrate()` do boot
 e rodar `dotnet ef database update` no pipeline de deploy.
 
 ### Existe um endpoint de health check?
 
-Sim, `GET /health`. Retorna `200 OK` com `{"status":"Healthy"}` se a API
-está de pé. Usado pelo Docker `HEALTHCHECK` e pelo Render.
+Sim, `GET /health`. Ele verifica de verdade se o banco SQLite está acessível
+(via health check do EF Core): retorna `200` com `{"status":"Healthy", ...}`
+quando tudo está bem e `503` quando o banco falha. Usado pelo Docker
+`HEALTHCHECK` e pelo Render.
 
 ## 11. Coisas que decidimos NÃO usar
 

@@ -23,6 +23,10 @@ public sealed class CreatePolicyUseCase(
         var premium = Money.Create(input.PremiumAmount);
         var coverage = CoveragePeriod.Create(input.CoverageStart, input.CoverageEnd);
 
+        // A brand-new policy born already expired makes no business sense.
+        if (coverage.End < _clock.TodayUtc)
+            throw new DomainValidationException("CoverageEnd cannot be earlier than today.");
+
         if (await _repo.ExistsActiveByPlateAsync(plate.Value, excludePolicyId: null, ct))
             throw new DomainValidationException(
                 $"There is already an active policy for vehicle {plate.Value}.");

@@ -7,7 +7,7 @@ namespace Segfy.Infrastructure.Persistence;
 
 public static class SegfyDbSeeder
 {
-    public static async Task SeedDevAsync(
+    public static async Task SeedSampleAsync(
         SegfyDbContext db,
         IClock clock,
         IPolicyNumberSequence sequence,

@@ -9,8 +9,8 @@ public sealed class DeletePolicyUseCase(IPolicyRepository repo)
 
     public async Task ExecuteAsync(Guid id, CancellationToken ct)
     {
-        var policy = await _repo.FindByIdAsync(id, ct)
-            ?? throw new DomainNotFoundException($"Policy {id} not found.");
-        await _repo.RemoveAsync(policy, ct);
+        var deleted = await _repo.DeleteByIdAsync(id, ct);
+        if (!deleted)
+            throw new DomainNotFoundException($"Policy {id} not found.");
     }
 }

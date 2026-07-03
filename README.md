@@ -227,6 +227,8 @@ data de início.
 
 * **Só uma apólice Ativa por placa**. Se você tentar criar uma segunda apólice
   ativa para a mesma placa, a API bloqueia (erro 400).
+* **Apólice não pode nascer vencida**. Criar uma apólice com data de término
+  anterior a hoje retorna erro 400.
 * **Apólice Cancelada ou Expirada é imutável**. Não dá para alterar CPF,
   placa, prêmio ou datas depois disso (erro 422).
 * **Histórico de status**. Toda troca de status fica registrada, com data,
@@ -253,7 +255,7 @@ O PDF do desafio pede várias coisas. Aqui está onde cada uma foi feita:
 | Banco de dados | SQLite + Entity Framework Core | Arquivo `segfy.db` criado no boot |
 | **Consulta SQL das apólices vencendo em 30 dias** | `PolicyRepository.ListExpiringAsync` com `FromSqlRaw` | Endpoint `GET /policies/expiring` |
 | Front-end (opcional) | Swagger UI substitui | Acesse `/docs` |
-| Testes unitários | `tests/Segfy.Domain.Tests` + `tests/Segfy.Application.Tests` | Rode `dotnet test`, 73 testes |
+| Testes unitários | `tests/Segfy.Domain.Tests` + `tests/Segfy.Application.Tests` + `tests/Segfy.Api.IntegrationTests` | Rode `dotnet test`, 92 testes |
 | README claro | Este arquivo | Você está lendo |
 
 ### Coisas extras (além do que o PDF pede)
@@ -294,6 +296,7 @@ src/
 tests/
   Segfy.Domain.Tests
   Segfy.Application.Tests
+  Segfy.Api.IntegrationTests
 ```
 
 Regras de dependência:
@@ -309,7 +312,8 @@ Regras de dependência:
 dotnet test
 ```
 
-São 73 testes (51 no Domain, 22 no Application). Roda em menos de 100 ms.
+São 92 testes (52 no Domain, 29 no Application, 11 de integração HTTP).
+Os unitários rodam em menos de 100 ms; a suíte completa em poucos segundos.
 
 ### Padrões usados
 

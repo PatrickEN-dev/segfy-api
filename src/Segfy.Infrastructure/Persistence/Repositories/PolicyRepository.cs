@@ -59,26 +59,23 @@ public sealed class PolicyRepository : IPolicyRepository
         var conditions = new List<string>();
         var parameters = new List<object>();
 
-        void AddLike(string columnSql, string rawValue)
+        // Registers the value as a positional parameter and returns its "{n}" placeholder.
+        string Param(object value)
         {
-            conditions.Add(string.Format(CultureInfo.InvariantCulture, columnSql, parameters.Count));
-            parameters.Add($"%{EscapeLikePattern(rawValue)}%");
+            parameters.Add(value);
+            return "{" + (parameters.Count - 1).ToString(CultureInfo.InvariantCulture) + "}";
         }
 
-        void AddEquals(string columnSql, object value)
-        {
-            conditions.Add(string.Format(CultureInfo.InvariantCulture, columnSql, parameters.Count));
-            parameters.Add(value);
-        }
+        static string Contains(string term) => $"%{EscapeLikePattern(term)}%";
 
         if (query.Status is { } status)
-            AddEquals("Status = {{{0}}}", status.ToString());
+            conditions.Add($"Status = {Param(status.ToString())}");
         if (!string.IsNullOrWhiteSpace(query.DocumentContains))
-            AddLike("Document LIKE {{{0}}} ESCAPE '\\'", query.DocumentContains.Trim());
+            conditions.Add($"Document LIKE {Param(Contains(query.DocumentContains.Trim()))} ESCAPE '\\'");
         if (!string.IsNullOrWhiteSpace(query.LicensePlateContains))
-            AddLike("LicensePlate LIKE {{{0}}} ESCAPE '\\'", query.LicensePlateContains.Trim().ToUpperInvariant());
+            conditions.Add($"LicensePlate LIKE {Param(Contains(query.LicensePlateContains.Trim().ToUpperInvariant()))} ESCAPE '\\'");
         if (!string.IsNullOrWhiteSpace(query.NumberContains))
-            AddLike("Number LIKE {{{0}}} ESCAPE '\\'", query.NumberContains.Trim().ToUpperInvariant());
+            conditions.Add($"Number LIKE {Param(Contains(query.NumberContains.Trim().ToUpperInvariant()))} ESCAPE '\\'");
 
         var whereClause = conditions.Count == 0 ? string.Empty : " WHERE " + string.Join(" AND ", conditions);
         return (whereClause, parameters);
@@ -109,11 +106,11 @@ public sealed class PolicyRepository : IPolicyRepository
         return SaveWithConstraintTranslationAsync(policy, ct);
     }
 
-    public async Task RemoveAsync(Policy policy, CancellationToken ct)
+    public async Task<bool> DeleteByIdAsync(Guid id, CancellationToken ct)
     {
-        ArgumentNullException.ThrowIfNull(policy);
-        _db.Policies.Remove(policy);
-        await _db.SaveChangesAsync(ct);
+        // Single round trip; status history rows go along via ON DELETE CASCADE.
+        var rows = await _db.Policies.Where(p => p.Id == id).ExecuteDeleteAsync(ct);
+        return rows > 0;
     }
 
     public async Task<IReadOnlyList<Policy>> ListExpiringAsync(

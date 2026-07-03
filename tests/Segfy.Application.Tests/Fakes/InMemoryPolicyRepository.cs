@@ -58,11 +58,8 @@ public sealed class InMemoryPolicyRepository : IPolicyRepository
 
     public Task UpdateAsync(Policy policy, CancellationToken ct) => Task.CompletedTask;
 
-    public Task RemoveAsync(Policy policy, CancellationToken ct)
-    {
-        _policies.Remove(policy);
-        return Task.CompletedTask;
-    }
+    public Task<bool> DeleteByIdAsync(Guid id, CancellationToken ct) =>
+        Task.FromResult(_policies.RemoveAll(p => p.Id == id) > 0);
 
     public Task<IReadOnlyList<Policy>> ListExpiringAsync(DateOnly today, int daysWindow, CancellationToken ct)
     {

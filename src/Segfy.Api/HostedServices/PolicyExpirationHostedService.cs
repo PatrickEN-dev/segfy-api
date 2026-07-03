@@ -32,14 +32,20 @@ public sealed class PolicyExpirationHostedService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            if (_options.CurrentValue.AutoExpirationEnabled)
-                await RunOnceAsync(stoppingToken);
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                if (_options.CurrentValue.AutoExpirationEnabled)
+                    await RunOnceAsync(stoppingToken);
 
-            var delay = TimeSpan.FromSeconds(_options.CurrentValue.AutoExpirationIntervalSeconds);
-            try { await Task.Delay(delay, stoppingToken); }
-            catch (TaskCanceledException) { break; }
+                var delay = TimeSpan.FromSeconds(_options.CurrentValue.AutoExpirationIntervalSeconds);
+                await Task.Delay(delay, stoppingToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Normal shutdown path.
         }
     }
 
