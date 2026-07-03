@@ -40,7 +40,9 @@ Ao subir, ela já vem com **6 apólices de exemplo** para você testar.
 
 ### Opção 1: Testar online no Render (sem instalar nada)
 
-Se você já tem o link do deploy: abra no navegador
+Deploy público (já no ar): <https://segfy-api-1.onrender.com/docs>
+
+Se for o seu próprio deploy, o endereço segue o padrão
 `https://<endereço>.onrender.com/docs`
 
 Vai abrir uma tela chamada **Swagger UI**. Nela dá pra clicar em cada endpoint,
@@ -141,6 +143,7 @@ Você pode combinar vários parâmetros na URL. Exemplos:
 * Só apólices ativas: `/policies?status=Ativa`
 * Buscar por CPF que contenha "529": `/policies?document=529`
 * Buscar por placa que contenha "ABC": `/policies?licensePlate=ABC`
+* Buscar por número que contenha "2026": `/policies?number=SEG-2026`
 * Ordenar por vencimento (mais próximo primeiro): `/policies?sortBy=coverageEnd&sortDir=asc`
 * Ordenar por prêmio (mais caro primeiro): `/policies?sortBy=premium&sortDir=desc`
 * Paginação: `/policies?page=2&pageSize=10`
@@ -339,7 +342,8 @@ Via `appsettings.json` ou variáveis de ambiente (padrão `Segfy__*`):
   "Segfy": {
     "ExpiringWindowDays": 30,
     "AutoExpirationEnabled": true,
-    "AutoExpirationIntervalSeconds": 3600
+    "AutoExpirationIntervalSeconds": 3600,
+    "SeedSampleData": true
   },
   "ConnectionStrings": { "Default": "Data Source=segfy.db;Cache=Shared" }
 }
