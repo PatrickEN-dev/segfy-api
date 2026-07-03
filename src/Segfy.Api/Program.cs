@@ -34,7 +34,11 @@ try
     app.UseSerilogRequestLogging();
     app.UseMiddleware<ExceptionHandlingMiddleware>();
     app.UseSwagger();
-    app.UseSwaggerUI(o => o.RoutePrefix = "docs");
+    app.UseSwaggerUI(o =>
+    {
+        o.RoutePrefix = "docs";
+        o.SwaggerEndpoint("/swagger/v1/swagger.json", "Segfy Policies API v1");
+    });
     app.MapControllers();
     app.MapSegfyHealth();
 
