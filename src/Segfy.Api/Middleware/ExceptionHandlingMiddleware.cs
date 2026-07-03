@@ -45,7 +45,7 @@ public sealed class ExceptionHandlingMiddleware
         {
             await WriteError(ctx, StatusCodes.Status400BadRequest, ex.Code, ex.Message);
         }
-#pragma warning disable CA1031 // Global fallback — must not leak exception details to client.
+#pragma warning disable CA1031 
         catch (Exception ex)
 #pragma warning restore CA1031
         {

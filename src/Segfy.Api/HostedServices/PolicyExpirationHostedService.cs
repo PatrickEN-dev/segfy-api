@@ -45,7 +45,6 @@ public sealed class PolicyExpirationHostedService : BackgroundService
         }
         catch (OperationCanceledException)
         {
-            // Normal shutdown path.
         }
     }
 
@@ -59,7 +58,7 @@ public sealed class PolicyExpirationHostedService : BackgroundService
             if (expired > 0)
                 LogExpired(_logger, expired, null);
         }
-#pragma warning disable CA1031 // Background job must not crash on domain errors.
+#pragma warning disable CA1031 
         catch (Exception ex)
 #pragma warning restore CA1031
         {
